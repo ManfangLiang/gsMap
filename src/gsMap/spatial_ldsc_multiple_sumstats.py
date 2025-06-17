@@ -20,10 +20,11 @@ logger = logging.getLogger("gsMap.spatial_ldsc")
 
 
 def _coef_new(jknife, Nbar):
-    """Calculate coefficients adjusted by Nbar."""
-    est_ = jknife.jknife_est[0, 0] / Nbar
-    se_ = jknife.jknife_se[0, 0] / Nbar
-    return est_, se_
+    """Calculate all coefficients adjusted by Nbar and return vectors."""
+    # Flatten and normalize full jackknife estimate and standard error vectors
+    est = (jknife.jknife_est.flatten() / Nbar)
+    se = (jknife.jknife_se.flatten() / Nbar)
+    return est, se
 
 
 def append_intercept(x):
@@ -308,6 +309,9 @@ def run_spatial_ldsc(config: SpatialLDSCConfig):
                 baseline_annotation * sumstats.N.values.reshape((-1, 1)) / sumstats.N.mean()
             )
             baseline_annotation = append_intercept(baseline_annotation)
+            # Prepare feature names for regression coefficients (spatial + baseline annotations + intercept)
+            baseline_cols = list(ref_ld_baseline.columns)
+            feature_names = [""] + baseline_cols + ["intercept"]
 
             Nbar = sumstats.N.mean()
             chunk_size = spatial_annotation.shape[1]
@@ -323,26 +327,39 @@ def run_spatial_ldsc(config: SpatialLDSCConfig):
                 n_blocks=n_blocks,
             )
 
-            out_chunk = thread_map(
+            # Run jackknife to get coefficient and SE vectors for each spot
+            results = thread_map(
                 jackknife_func,
                 range(chunk_size),
                 max_workers=config.num_processes,
                 chunksize=10,
                 desc=f"Chunk-{chunk_index}/Total-chunk-{running_chunk_number} for {trait_name}",
             )
-
-            out_chunk = pd.DataFrame.from_records(
-                out_chunk, columns=["beta", "se"], index=spatial_annotation_cnames
-            )
-            nan_spots = out_chunk[out_chunk.isna().any(axis=1)].index
-            if len(nan_spots) > 0:
+            # Convert results into matrices: rows=spots, cols=features
+            est_mat = np.vstack([r[0] for r in results])
+            se_mat = np.vstack([r[1] for r in results])
+            # Compute z and p for each feature
+            z_mat = est_mat / se_mat
+            p_mat = norm.sf(z_mat)
+            # Clip p-matrix to avoid zeros or >1 values
+            p_mat = np.clip(p_mat, 1e-300, 1)
+            # Build DataFrame
+            out_df = pd.DataFrame(index=spatial_annotation_cnames)
+            for i, fname in enumerate(feature_names):
+                out_df[f"{fname}_beta"] = est_mat[:, i]
+                out_df[f"{fname}_se"] = se_mat[:, i]
+                out_df[f"{fname}_z"] = z_mat[:, i]
+                out_df[f"{fname}_p"] = p_mat[:, i]
+            # Remove any spots with NaNs
+            num_spots_before = out_df.shape[0]
+            out_df = out_df.dropna()
+            num_spots_after = out_df.shape[0]
+            num_nan_spots = num_spots_before - num_spots_after
+            if num_nan_spots > 0:
                 logger.info(
-                    f"Nan spots: {nan_spots} in chunk-{chunk_index} for {trait_name}. They are removed."
+                    f"Nan spots: {num_nan_spots} in chunk-{chunk_index} for {trait_name}. They are removed."
                 )
-            out_chunk = out_chunk.dropna()
-            out_chunk["z"] = out_chunk.beta / out_chunk.se
-            out_chunk["p"] = norm.sf(out_chunk["z"])
-            output_dict[trait_name].append(out_chunk)
+            output_dict[trait_name].append(out_df)
 
             del spatial_annotation, baseline_annotation, w_ld_common_snp
             gc.collect()
@@ -425,10 +442,10 @@ def save_results(output_dict, config, running_chunk_number, start_chunk, end_chu
             out_file_name = (
                 out_dir / f"{sample_name}_{trait_name}_chunk{start_chunk}-{end_chunk}.csv.gz"
             )
+        # Add spot identifier and reorder columns: spot first, then all feature columns
         out_all["spot"] = out_all.index
-        out_all = out_all[["spot", "beta", "se", "z", "p"]]
+        cols = ["spot"] + [c for c in out_all.columns if c != "spot"]
+        out_all = out_all[cols]
 
-        # clip the p-values
-        out_all["p"] = out_all["p"].clip(1e-300, 1)
         out_all.to_csv(out_file_name, compression="gzip", index=False)
         logger.info(f"Output saved to {out_file_name} for {trait_name}")
