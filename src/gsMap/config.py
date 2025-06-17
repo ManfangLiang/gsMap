@@ -416,6 +416,13 @@ def add_spatial_ldsc_args(parser):
         help="Path to regression weight file. If not provided, will use weights generated in the generate_ldscore step.",
     )
     parser.add_argument(
+        "--ldscore_save_dir",
+        type=str,
+        required=False,
+        default=None,
+        help="Path to LD score.",
+    )
+    parser.add_argument(
         "--trait_name", type=str, required=True, help="Name of the trait being analyzed."
     )
     parser.add_argument(
@@ -434,6 +441,11 @@ def add_spatial_ldsc_args(parser):
         const=True,
         default=True,
         help="Use additional baseline annotations when provided",
+    )
+    parser.add_argument(
+        "--chunk_range", 
+        nargs=2,
+        type=int, help="Range of chunks to process (start end)."
     )
 
 
@@ -776,6 +788,7 @@ class ConfigWithAutoPaths:
             f"{self.workdir}/{self.sample_name}/latent_to_gene/{self.sample_name}_gene_marker_score.feather"
         )
 
+    # comment out if using ldscore_save_dir directly
     @property
     @ensure_path_exists
     def ldscore_save_dir(self) -> Path:
@@ -784,7 +797,7 @@ class ConfigWithAutoPaths:
     @property
     @ensure_path_exists
     def ldsc_save_dir(self) -> Path:
-        return Path(f"{self.workdir}/{self.sample_name}/spatial_ldsc")
+        return Path(f"{self.workdir}/{self.sample_name}/spatial_ldsc") # out directory for ldsc results
 
     @property
     @ensure_path_exists
@@ -1108,8 +1121,8 @@ class GenerateLDScoreConfig(ConfigWithAutoPaths):
 
 @dataclass
 class SpatialLDSCConfig(ConfigWithAutoPaths):
+    ldscore_save_dir: str | None = None
     w_file: str | None = None
-    # ldscore_save_dir: str
     use_additional_baseline_annotation: bool = True
     trait_name: str | None = None
     sumstats_file: str | None = None
