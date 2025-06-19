@@ -415,13 +415,13 @@ def add_spatial_ldsc_args(parser):
         default=None,
         help="Path to regression weight file. If not provided, will use weights generated in the generate_ldscore step.",
     )
-    parser.add_argument(
-        "--ldscore_save_dir",
-        type=str,
-        required=False,
-        default=None,
-        help="Path to LD score.",
-    )
+    # parser.add_argument(
+    #     "--ldscore_save_dir",
+    #     type=str,
+    #     required=False,
+    #     default=None,
+    #     help="Path to LD score.",
+    # )
     parser.add_argument(
         "--trait_name", type=str, required=True, help="Name of the trait being analyzed."
     )
@@ -1121,7 +1121,7 @@ class GenerateLDScoreConfig(ConfigWithAutoPaths):
 
 @dataclass
 class SpatialLDSCConfig(ConfigWithAutoPaths):
-    ldscore_save_dir: str | None = None
+    # ldscore_save_dir: str | None = None
     w_file: str | None = None
     use_additional_baseline_annotation: bool = True
     trait_name: str | None = None
