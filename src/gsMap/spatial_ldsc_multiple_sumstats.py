@@ -311,7 +311,7 @@ def run_spatial_ldsc(config: SpatialLDSCConfig):
             baseline_annotation = append_intercept(baseline_annotation)
             # Prepare feature names for regression coefficients (spatial + baseline annotations + intercept)
             baseline_cols = list(ref_ld_baseline.columns)
-            feature_names = [""] + baseline_cols + ["intercept"]
+            feature_names = ["spatial"] + baseline_cols + ["intercept"]
 
             Nbar = sumstats.N.mean()
             chunk_size = spatial_annotation.shape[1]
@@ -350,6 +350,7 @@ def run_spatial_ldsc(config: SpatialLDSCConfig):
                 out_df[f"{fname}_se"] = se_mat[:, i]
                 out_df[f"{fname}_z"] = z_mat[:, i]
                 out_df[f"{fname}_p"] = p_mat[:, i]
+            out_df.rename(columns={'spatial_p': 'p'}, inplace=True)
             # Remove any spots with NaNs
             num_spots_before = out_df.shape[0]
             out_df = out_df.dropna()
