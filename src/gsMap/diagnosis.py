@@ -316,26 +316,30 @@ def generate_gsMap_plot(config: DiagnosisConfig):
         (pixel_width, pixel_height), point_size = estimate_point_size_for_plot(
             adata.obsm["spatial"]
         )
-    fig = draw_scatter(
-        space_coord_concat,
-        title=f"{config.trait_name} (gsMap)",
-        point_size=point_size,
-        width=pixel_width,
-        height=pixel_height,
-        annotation=config.annotation,
-    )
 
     output_dir = config.get_gsMap_plot_save_dir(config.trait_name)
-    output_file_html = config.get_gsMap_html_plot_save_path(config.trait_name)
-    output_file_png = output_file_html.with_suffix(".png")
-    output_file_csv = output_file_html.with_suffix(".csv")
 
-    fig.write_html(output_file_html)
-    fig.write_image(output_file_png)
+    for col in trait_ldsc_result.columns:
+        logger.info(f"Drawing scatter plot for column: {col} ...")
+        fig = draw_scatter(
+            space_coord_concat,
+            title=f"{config.sample_name} {config.trait_name} ({col})",
+            point_size=point_size,
+            width=pixel_width,
+            height=pixel_height,
+            annotation=config.annotation,
+            color_by=col,
+        )
+
+        output_file_html = output_dir / f"{config.sample_name}_{config.trait_name}_{col}.html"
+        output_file_png = output_dir / f"{config.sample_name}_{config.trait_name}_{col}.png"
+        fig.write_html(output_file_html)
+        fig.write_image(output_file_png)
+
+    output_file_csv = output_file_html.with_suffix(".csv")
     space_coord_concat.to_csv(output_file_csv)
 
     logger.info(f"gsMap plot created and saved in {output_dir}.")
-
 
 def run_Diagnosis(config: DiagnosisConfig):
     """Main function to run the diagnostic plot generation."""

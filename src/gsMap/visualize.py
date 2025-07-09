@@ -14,13 +14,16 @@ def load_ldsc(ldsc_input_file):
     ldsc = pd.read_csv(
         ldsc_input_file,
         compression="gzip",
-        dtype={"spot": str, "p": float},
+        dtype={"spot": str},
         index_col="spot",
-        usecols=["spot", "p"],
     )
-    ldsc["logp"] = -np.log10(ldsc.p)
+    # Select all columns whose names end with 'p'
+    selected_cols = [col for col in ldsc.columns if col.endswith("p")]
+    ldsc = ldsc[selected_cols]
+    # Apply -log10 to each selected column and prepend 'logp_' to the column names
+    ldsc = ldsc.apply(lambda col: -np.log10(col)).rename(columns=lambda x: f"logp_{x}".removesuffix("_p"))
+    ldsc = ldsc.rename({"logp_p": "logp"}, axis=1)
     return ldsc
-
 
 # %%
 def load_st_coord(adata, feature_series: pd.Series, annotation):
@@ -178,7 +181,6 @@ def draw_scatter(
 
     return fig
 
-
 def run_Visualize(config: VisualizeConfig):
     print(f"------Loading LDSC results of {config.ldsc_save_dir}...")
     ldsc = load_ldsc(
@@ -215,3 +217,49 @@ def run_Visualize(config: VisualizeConfig):
         f"------The visualization result is saved in a html file: {output_file_html} which can interactively viewed in a web browser and a pdf file: {output_file_pdf}."
     )
     print(f"------The visualization data is saved in a csv file: {output_file_csv}.")
+
+# def run_Visualize(config: VisualizeConfig):
+#     print(f"------Loading LDSC results of {config.ldsc_save_dir}...")
+#     ldsc = load_ldsc(
+#         ldsc_input_file=Path(config.ldsc_save_dir)
+#         / f"{config.sample_name}_{config.trait_name}.csv.gz"
+#     )
+
+#     print(f"------Loading ST data of {config.sample_name}...")
+#     adata = sc.read_h5ad(f"{config.hdf5_with_latent_path}")
+#     space_coord_concat = load_st_coord(adata, ldsc, annotation=config.annotation)
+#     print(space_coord_concat.head())
+#     # Visualization
+#     output_dir = Path(config.output_dir)
+#     output_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+
+#     # Iterate over each column in ldsc (excluding coordinate and annotation columns)
+#     for col in ldsc.columns:
+#         print(f"------Drawing scatter plot for column: {col} ...")
+#         # Create the scatter plot for the current column
+#         fig = draw_scatter(
+#             space_coord_concat=space_coord_concat,
+#             title=f"{config.sample_name} {config.trait_name} ({col})",
+#             fig_style=config.fig_style,
+#             point_size=config.point_size,
+#             width=config.fig_width,
+#             height=config.fig_height,
+#             annotation=config.annotation,
+#             color_by=col,
+#         )
+
+#         # Set the file paths based on the current column
+#         output_file_html = output_dir / f"{config.sample_name}_{config.trait_name}_{col}.html"
+#         output_file_pdf = output_dir / f"{config.sample_name}_{config.trait_name}_{col}.pdf"
+
+#         # Save the visualizations and data
+#         fig.write_html(str(output_file_html))
+#         fig.write_image(str(output_file_pdf))
+
+#         print(
+#             f"------Visualization for column {col} saved as HTML: {output_file_html}, PNG: {output_file_pdf}, CSV: {output_file_csv}."
+#         )
+#     output_file_csv = output_dir / f"{config.sample_name}_{config.trait_name}.csv"
+#     space_coord_concat.to_csv(str(output_file_csv))
+#     print(f"------Spatial coordinates and annotations saved to {output_file_csv}.")
+   
